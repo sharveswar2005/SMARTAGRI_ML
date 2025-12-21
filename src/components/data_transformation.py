@@ -17,27 +17,28 @@ class DataTransformation:
         self.preprocessor_path = os.path.join(
             "artifacts", "preprocessor.pkl"
         )
+        # Actual yield column in your dataset
+        self.yield_column = "hg/ha_yield"
 
     def create_risk_score(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Convert Yield column into Risk Score (0–100)
+        Convert yield column into Risk Score (0–100)
         """
         try:
             logging.info("Creating risk score from yield")
 
-            yield_min = df["Yield"].min()
-            yield_max = df["Yield"].max()
+            yield_min = df[self.yield_column].min()
+            yield_max = df[self.yield_column].max()
 
-            # Normalize yield to 0–100
             df["Yield_Normalized"] = (
-                (df["Yield"] - yield_min) / (yield_max - yield_min)
+                (df[self.yield_column] - yield_min)
+                / (yield_max - yield_min)
             ) * 100
 
-            # Risk score = inverse of yield
+            # Higher yield → lower risk
             df["Risk_Score"] = 100 - df["Yield_Normalized"]
 
             logging.info("Risk score created successfully")
-
             return df
 
         except Exception as e:
@@ -51,9 +52,15 @@ class DataTransformation:
             logging.info("Creating preprocessing pipeline")
 
             categorical_cols = df.select_dtypes(include=["object"]).columns
-            numerical_cols = df.select_dtypes(exclude=["object"]).drop(
-                ["Risk_Score", "Yield", "Yield_Normalized"], axis=1
-            ).columns
+
+            numerical_cols = (
+                df.select_dtypes(exclude=["object"])
+                .drop(
+                    ["Risk_Score", "Yield_Normalized", self.yield_column],
+                    axis=1
+                )
+                .columns
+            )
 
             # Numerical pipeline
             num_pipeline = Pipeline(
@@ -79,7 +86,6 @@ class DataTransformation:
             )
 
             logging.info("Preprocessing pipeline created")
-
             return preprocessor
 
         except Exception as e:
@@ -92,18 +98,25 @@ class DataTransformation:
             train_df = pd.read_csv(train_path)
             test_df = pd.read_csv(test_path)
 
+            # Remove unwanted index column
+            if "Unnamed: 0" in train_df.columns:
+                train_df.drop(columns=["Unnamed: 0"], inplace=True)
+                test_df.drop(columns=["Unnamed: 0"], inplace=True)
+
             # Create risk score
             train_df = self.create_risk_score(train_df)
             test_df = self.create_risk_score(test_df)
 
             # Separate features and target
             X_train = train_df.drop(
-                ["Risk_Score", "Yield", "Yield_Normalized"], axis=1
+                ["Risk_Score", "Yield_Normalized", self.yield_column],
+                axis=1
             )
             y_train = train_df["Risk_Score"]
 
             X_test = test_df.drop(
-                ["Risk_Score", "Yield", "Yield_Normalized"], axis=1
+                ["Risk_Score", "Yield_Normalized", self.yield_column],
+                axis=1
             )
             y_test = test_df["Risk_Score"]
 
