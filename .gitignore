@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.env
+
+# Artifacts / Models
+artifacts/
+*.pkl
+
+# Logs
+logs/
+*.log
+
+# Data files (optional, keep raw if needed)
+data/*.csv
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node (if any frontend later)
+node_modules/

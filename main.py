@@ -10,9 +10,6 @@ app = FastAPI(
     version="1.0"
 )
 
-# -----------------------------
-# Input Schema
-# -----------------------------
 class CropInput(BaseModel):
     Area: float
     Item: str
@@ -21,18 +18,10 @@ class CropInput(BaseModel):
     pesticides_tonnes: float
     avg_temp: float
 
-
-# -----------------------------
-# Health Check Endpoint
-# -----------------------------
 @app.get("/health")
 def health_check():
     return {"status": "API is running"}
 
-
-# -----------------------------
-# Prediction Endpoint
-# -----------------------------
 @app.post("/predict")
 def predict_risk(data: CropInput):
     try:
