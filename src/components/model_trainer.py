@@ -2,17 +2,20 @@ import os
 import sys
 import numpy as np
 
-from sklearn.ensemble import BaggingRegressor, RandomForestRegressor
-from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from xgboost import XGBRegressor
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, r2_score
 
 from src.exception import CustomException
 from src.logger import logging
+from src.utils import read_yaml
 
 
 class ModelTrainer:
     def __init__(self):
         self.model_path = os.path.join("artifacts", "model.pkl")
+        self.config = read_yaml("config.yaml")
 
     def evaluate_model(self, y_true, y_pred):
         """
@@ -30,76 +33,61 @@ class ModelTrainer:
         y_test
     ):
         try:
-            logging.info("Starting model training")
+            logging.info("Starting model training with Hyperparameter tuning")
 
-            # -----------------------------
-            # 1️⃣ Bagging Regressor
-            # -----------------------------
-            bagging_model = BaggingRegressor(
-                estimator=DecisionTreeRegressor(),
-                n_estimators=100,
-                random_state=42,
-                n_jobs=-1
-            )
+            models = {
+                "RandomForestRegressor": RandomForestRegressor(random_state=42),
+                "GradientBoostingRegressor": GradientBoostingRegressor(random_state=42),
+                "XGBRegressor": XGBRegressor(random_state=42)
+            }
 
-            bagging_model.fit(X_train, y_train)
-            bagging_pred = bagging_model.predict(X_test)
+            model_params = self.config['model_params']
+            cv_folds = self.config['ml_settings']['cv_folds']
+            n_iter = self.config['ml_settings']['n_iter_search']
 
-            bagging_rmse, bagging_r2 = self.evaluate_model(
-                y_test, bagging_pred
-            )
+            best_model_name = None
+            best_model_score = -float("inf")
+            best_model_instance = None
+            best_rmse = float("inf")
 
-            logging.info(
-                f"BaggingRegressor RMSE: {bagging_rmse}, R2: {bagging_r2}"
-            )
+            for name, model in models.items():
+                logging.info(f"Training {name}")
+                params = model_params.get(name, {})
+                search = RandomizedSearchCV(
+                    estimator=model,
+                    param_distributions=params,
+                    n_iter=n_iter,
+                    cv=cv_folds,
+                    scoring='r2',
+                    random_state=42,
+                    n_jobs=-1
+                )
+                search.fit(X_train, y_train)
 
-            # -----------------------------
-            # 2️⃣ Random Forest Regressor
-            # -----------------------------
-            rf_model = RandomForestRegressor(
-                n_estimators=100,
-                random_state=42,
-                n_jobs=-1
-            )
+                best_estimator = search.best_estimator_
+                y_pred = best_estimator.predict(X_test)
 
-            rf_model.fit(X_train, y_train)
-            rf_pred = rf_model.predict(X_test)
+                rmse, r2 = self.evaluate_model(y_test, y_pred)
+                logging.info(f"{name} Best Params: {search.best_params_} | RMSE: {rmse:.4f} | R2: {r2:.4f}")
 
-            rf_rmse, rf_r2 = self.evaluate_model(
-                y_test, rf_pred
-            )
+                if r2 > best_model_score:
+                    best_model_score = r2
+                    best_rmse = rmse
+                    best_model_name = name
+                    best_model_instance = best_estimator
 
-            logging.info(
-                f"RandomForest RMSE: {rf_rmse}, R2: {rf_r2}"
-            )
+            if best_model_score < 0.5:
+                logging.warning("Best model has an R2 score less than 0.5")
 
-            # -----------------------------
-            # 3️⃣ Select Best Model
-            # -----------------------------
-            if bagging_rmse <= rf_rmse:
-                best_model = bagging_model
-                best_model_name = "BaggingRegressor"
-                best_rmse = bagging_rmse
-                best_r2 = bagging_r2
-            else:
-                best_model = rf_model
-                best_model_name = "RandomForestRegressor"
-                best_rmse = rf_rmse
-                best_r2 = rf_r2
+            logging.info(f"Overall Best Model: {best_model_name} (RMSE={best_rmse:.4f}, R2={best_model_score:.4f})")
 
-            logging.info(
-                f"Best model selected: {best_model_name} "
-                f"(RMSE={best_rmse}, R2={best_r2})"
-            )
-
-            # Save best model
             os.makedirs("artifacts", exist_ok=True)
             import joblib
-            joblib.dump(best_model, self.model_path)
+            joblib.dump(best_model_instance, self.model_path)
 
-            logging.info("Model training completed successfully")
+            logging.info("Model training completed successfully and saved best model.")
 
-            return best_model_name, best_rmse, best_r2
+            return best_model_name, best_rmse, best_model_score
 
         except Exception as e:
             raise CustomException(e, sys)

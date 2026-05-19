@@ -9,3 +9,5 @@ uvicorn
 streamlit
 joblib
 pydantic
+xgboost
+pyyaml

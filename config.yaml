@@ -1,0 +1,27 @@
+# Configuration for SmartAgriML Project
+
+paths:
+  train_data: "artifacts/train.csv"
+  test_data: "artifacts/test.csv"
+  raw_data: "artifacts/data.csv"
+  preprocessor_obj: "artifacts/preprocessor.pkl"
+  model_path: "artifacts/model.pkl"
+
+model_params:
+  RandomForestRegressor:
+    n_estimators: [100, 200, 300]
+    max_depth: [5, 10, 15, null]
+    min_samples_split: [2, 5, 10]
+  XGBRegressor:
+    learning_rate: [0.01, 0.05, 0.1]
+    max_depth: [3, 5, 7]
+    n_estimators: [100, 200]
+  GradientBoostingRegressor:
+    learning_rate: [0.01, 0.05, 0.1]
+    n_estimators: [100, 200]
+    subsample: [0.8, 1.0]
+
+ml_settings:
+  random_state: 42
+  cv_folds: 3
+  n_iter_search: 5 # For RandomizedSearchCV

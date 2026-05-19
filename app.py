@@ -1,194 +1,174 @@
 import streamlit as st
 import requests
+import pandas as pd
+import time
+import altair as alt
 
 # =========================================================
 # CONFIG
 # =========================================================
 API_URL = "http://localhost:8000/predict"
-
-# Persistent HTTP session
 session = requests.Session()
 
-# =========================================================
-# PAGE CONFIG
-# =========================================================
 st.set_page_config(
     page_title="SmartAgriML | Crop Failure Risk",
     page_icon="🌾",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
 # =========================================================
-# CUSTOM CSS (Dark, Clean UI)
+# CUSTOM CSS (Premium UI)
 # =========================================================
 st.markdown("""
 <style>
-section.main > div {
-    background-color: transparent;
-}
+.stApp { background: #0f172a; color: #f8fafc; }
+.main-title { font-size: 42px; font-weight: 800; color: #e5e7eb; text-align: center; }
+.subtitle { font-size: 16px; color: #94a3b8; text-align: center; margin-bottom: 30px; }
 
-.stApp {
-    background: radial-gradient(circle at top, #0f172a, #020617);
-}
-
-.main-title {
-    font-size: 48px;
-    font-weight: 800;
-    color: #e5e7eb;
-}
-
-.subtitle {
-    font-size: 18px;
-    color: #c7d2fe;
-    margin-bottom: 40px;
-}
-
-.card {
-    background: #020617;
-    padding: 28px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 15px 35px rgba(0,0,0,0.7);
-    margin-bottom: 20px;
-}
-
-.stButton > button {
-    background: linear-gradient(90deg, #2563eb, #3b82f6);
-    color: white;
-    border-radius: 10px;
-    padding: 12px 26px;
-    font-weight: 600;
-    border: none;
-}
-
-.risk-high {
-    background: linear-gradient(90deg, #dc2626, #ef4444);
-    color: white;
-    padding: 14px;
+/* Gradient Cards */
+.metric-card {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border: 1px solid #334155;
     border-radius: 12px;
-    font-weight: bold;
+    padding: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
     text-align: center;
 }
+.metric-value { font-size: 36px; font-weight: bold; color: #38bdf8; }
+.metric-label { font-size: 14px; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: 1px; }
 
-.risk-medium {
-    background: linear-gradient(90deg, #f59e0b, #fbbf24);
-    color: black;
-    padding: 14px;
-    border-radius: 12px;
-    font-weight: bold;
-    text-align: center;
-}
+.risk-High { border-top: 4px solid #ef4444; }
+.risk-High .metric-value { color: #ef4444; }
+.risk-Medium { border-top: 4px solid #f59e0b; }
+.risk-Medium .metric-value { color: #f59e0b; }
+.risk-Low { border-top: 4px solid #10b981; }
+.risk-Low .metric-value { color: #10b981; }
 
-.risk-low {
-    background: linear-gradient(90deg, #16a34a, #22c55e);
-    color: white;
-    padding: 14px;
-    border-radius: 12px;
-    font-weight: bold;
-    text-align: center;
-}
+hr { border-color: #334155; }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
 # HEADER
 # =========================================================
-st.markdown('<div class="main-title">🌾 SmartAgriML</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="subtitle">AI-powered Crop Failure Risk Prediction System</div>',
-    unsafe_allow_html=True
-)
+st.markdown('<div class="main-title">🌾 SmartAgriML Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI-powered Prediction of Crop Failure Risk & Yield Security</div><hr>', unsafe_allow_html=True)
 
 # =========================================================
-# LAYOUT
+# SIDEBAR (INPUTS)
 # =========================================================
-col1, col2 = st.columns([1.25, 1])
+with st.sidebar:
+    st.title("⚙️ Parameters")
+    st.markdown("Enter environmental and crop details:")
+    
+    Item = st.selectbox("Crop Type", ["Rice", "Wheat", "Maize", "Soybeans", "Potatoes"], index=0)
+    Area = st.number_input("Area (hectares)", min_value=1.0, value=1200.0, step=100.0)
+    Year = st.slider("Year", min_value=2000, max_value=2030, value=2025)
+    Rainfall = st.slider("Rainfall (mm/yr)", min_value=0.0, max_value=4000.0, value=1200.0)
+    Temperature = st.slider("Temperature (°C)", min_value=-5.0, max_value=50.0, value=26.0)
+    Pesticides = st.number_input("Pesticides (tonnes)", min_value=0.0, value=1.2, step=0.1)
+
+    predict_btn = st.button("🚀 Predict Risk Level", use_container_width=True, type="primary")
 
 # =========================================================
-# INPUT CARD
+# MAIN CONTENT
 # =========================================================
-with col1:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("📥 Enter Crop & Climate Details")
+if predict_btn:
+    payload = {
+        "Area": Area,
+        "Item": Item,
+        "Year": Year,
+        "average_rain_fall_mm_per_year": Rainfall,
+        "pesticides_tonnes": Pesticides,
+        "avg_temp": Temperature
+    }
 
-    Area = st.number_input("Area (hectares)", min_value=0.0, value=1200.0)
-    Item = st.text_input("Crop Name", value="Rice")
-    Year = st.number_input("Year", min_value=1900, max_value=2100, value=2018)
-    Rainfall = st.number_input("Average Rainfall (mm/year)", min_value=0.0, value=1200.0)
-    Pesticides = st.number_input("Pesticides Used (tonnes)", min_value=0.0, value=1.2)
-    Temperature = st.number_input("Average Temperature (°C)", min_value=-10.0, value=26.0)
-
-    predict_btn = st.button("🚀 Predict Risk")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================================================
-# OUTPUT CARD
-# =========================================================
-# =========================================================
-# OUTPUT CARD
-# =========================================================
-with col2:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("📊 Prediction Result")
-
-    output_placeholder = st.empty()
-
-    if predict_btn:
-        payload = {
-            "Area": Area,
-            "Item": Item,
-            "Year": Year,
-            "average_rain_fall_mm_per_year": Rainfall,
-            "pesticides_tonnes": Pesticides,
-            "avg_temp": Temperature
-        }
-
+    with st.spinner("Analyzing parameters and computing SHAP factors..."):
+        time.sleep(0.8) # UX enhancement
         try:
-            # Step 1: Analyzing text
-            output_placeholder.markdown(
-                "🔍 **Analyzing crop & climate data...**"
-            )
-
-            # Small delay for UX feel (optional but nice)
-            import time
-            time.sleep(0.6)
-
-            # Step 2: Model execution text
-            output_placeholder.markdown(
-                "📡 **Running machine learning risk model...**"
-            )
-
-            # Actual backend call
             response = session.post(API_URL, json=payload)
+            if response.status_code == 200:
+                result = response.json()
+                
+                score = result.get("crop_failure_risk_score", 0)
+                level = result.get("risk_level", "Unknown")
+                conf = result.get("confidence", 0.0) * 100
+                factors = result.get("key_factors", [])
 
-            result = response.json()
-            score = result["crop_failure_risk_score"]
-            level = result["risk_level"]
+                # Save to history
+                st.session_state.history.insert(0, {
+                    "Crop": Item, "Area (ha)": Area, "Rainfall": Rainfall, 
+                    "Temp (°C)": Temperature, "Risk Score": f"{score:.1f}", "Level": level
+                })
+                
+                # --- KPI CARDS ---
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown(f'<div class="metric-card risk-{level}"><div class="metric-label">Risk Category</div><div class="metric-value">{level.upper()}</div></div>', unsafe_allow_html=True)
+                with col2:
+                    st.markdown(f'<div class="metric-card"><div class="metric-label">Risk Score (0-100)</div><div class="metric-value">{score:.1f}</div></div>', unsafe_allow_html=True)
+                with col3:
+                    st.markdown(f'<div class="metric-card"><div class="metric-label">Model Confidence</div><div class="metric-value">{conf:.1f}%</div></div>', unsafe_allow_html=True)
 
-            # Step 3: Final output
-            output_placeholder.empty()
-            st.metric("Risk Score", f"{score:.2f}")
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- CHARTS ---
+                col_chart1, col_chart2 = st.columns([1.2, 1])
+                
+                with col_chart1:
+                    st.subheader("🔍 Feature Importance (Explainability)")
+                    if factors:
+                        factor_df = pd.DataFrame(factors)
+                        # Normalize importance for better UI chart scaling
+                        max_imp = factor_df['importance'].max()
+                        factor_df['importance'] = (factor_df['importance'] / max_imp) * 100
+                        
+                        chart = alt.Chart(factor_df).mark_bar(cornerRadiusEnd=4).encode(
+                            x=alt.X('importance:Q', title='Relative Importance (%)'),
+                            y=alt.Y('feature:N', sort='-x', title=''),
+                            color=alt.condition(
+                                alt.datum.importance > 50,
+                                alt.value('#ef4444'),  # High imp -> Red
+                                alt.value('#64748b')   # Low imp -> Slate
+                            ),
+                            tooltip=['feature', 'importance']
+                        ).properties(height=250)
+                        st.altair_chart(chart, use_container_width=True)
+                    else:
+                        st.info("Feature importances not available for this model.")
+                        
+                with col_chart2:
+                    st.subheader("💡 Analysis Summary")
+                    st.markdown(f"""
+                    - **Primary Issue**: The most critical driver of this risk score is **{factors[0]['feature'] if factors else 'Unknown'}**.
+                    - **Temperature Impact**: At {Temperature}°C, crop resilience changes strictly depending on rainfall.
+                    - **Pesticide Usage**: {Pesticides} tonnes applied to {Area} hectares.
+                    """)
+                    if level == "High":
+                        st.warning("Immediate intervention required to mitigate expected yield losses.")
+                    elif level == "Medium":
+                        st.info("Monitor weather and consider preemptive defensive agricultural practices.")
+                    else:
+                        st.success("Conditions are currently optimal for maximum yield.")
 
-            if level == "High":
-                st.markdown('<div class="risk-high">HIGH RISK</div>', unsafe_allow_html=True)
-            elif level == "Medium":
-                st.markdown('<div class="risk-medium">MEDIUM RISK</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="risk-low">LOW RISK</div>', unsafe_allow_html=True)
+                st.error(f"Error from API: {response.text}")
+        except Exception as e:
+            st.error(f"Failed to connect to Backend API. Ensure FastAPI is running on port 8000. Error: {str(e)}")
 
-        except Exception:
-            output_placeholder.empty()
-            st.error("Backend is not running. Start FastAPI first.")
-
-    else:
-        st.info("Enter details and click **Predict Risk**")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.info("👈 Adjust the parameters in the sidebar and click **Predict Risk Level** to start.")
 
 # =========================================================
-# FOOTER
+# PREDICTION HISTORY
 # =========================================================
-st.markdown(
-    "<hr><center style='color:#9ca3af;'>© 2025 SmartAgriML | Machine Learning Portfolio Project</center>",
-    unsafe_allow_html=True
-)
+if st.session_state.history:
+    st.markdown("<br><hr>", unsafe_allow_html=True)
+    st.subheader("🕒 Recent Predictions Session History")
+    st.dataframe(pd.DataFrame(st.session_state.history).head(5), use_container_width=True)
+

@@ -1,3 +1,10 @@
+import yaml
+import os
+
+def read_yaml(file_path: str) -> dict:
+    with open(file_path, "r") as file:
+        return yaml.safe_load(file)
+
 class CropInputData:
     def __init__(
         self,

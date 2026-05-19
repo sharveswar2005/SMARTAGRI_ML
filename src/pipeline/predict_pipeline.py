@@ -32,10 +32,22 @@ class PredictPipeline:
 
             # Predict risk score
             prediction = model.predict(input_processed)[0]
+            
+            # Extract Feature Importances if available
+            key_factors = []
+            if hasattr(model, "feature_importances_"):
+                importances = model.feature_importances_
+                try:
+                    feature_names = preprocessor.get_feature_names_out()
+                except AttributeError:
+                    feature_names = [f"Feature_{i}" for i in range(len(importances))]
+                
+                factors = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+                # Parse clean names
+                key_factors = [{"feature": str(f).split("__")[-1], "importance": float(imp)} for f, imp in factors[:5]]
 
             logging.info("Prediction completed successfully")
-
-            return prediction
+            return prediction, key_factors
 
         except Exception as e:
             raise CustomException(e, sys)

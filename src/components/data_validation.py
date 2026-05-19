@@ -31,6 +31,20 @@ class DataValidation:
                     sys
                 )
 
+            # 4️⃣ Handle Missing Values
+            missing_values = df.isnull().sum()
+            logging.info(f"Missing values count per column:\n{missing_values}")
+            if df.isnull().sum().sum() > 0:
+                logging.info("Missing values detected. Imputing and dropping appropriately.")
+                df.dropna(subset=[self.target_column], inplace=True)
+                df.fillna(method="ffill", inplace=True) # Basic imputation logic for remaining features
+
+            # 5️⃣ Optional: Validating required datatypes
+            required_columns = ["Area", "Item", "Year", "average_rain_fall_mm_per_year", "pesticides_tonnes", "avg_temp"]
+            for col in required_columns:
+                if col not in df.columns:
+                    raise CustomException(f"Required Feature '{col}' missing from dataset", sys)
+
             logging.info("Data validation completed successfully")
             return True
 
